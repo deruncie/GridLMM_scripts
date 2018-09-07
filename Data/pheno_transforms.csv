@@ -1,0 +1,108 @@
+﻿Trait,Log,Log_Atwell
+1_LD,1,1
+2_LDV,1,1
+3_SD,1,1
+4_SDV,1,1
+5_FT10,1,1
+6_FT16,1,1
+7_FT22,1,1
+8_Seed Dormancy,0,0
+9_Emco5,0,0
+10_Emwa1,0,0
+11_Emoy*,0,0
+12_Hiks1,0,0
+13_Noco2,0,0
+14_Li7,0,0
+15_B11,0,0
+16_Na23,1,1
+17_Mg25,0,0
+18_P31,0,0
+19_S34,0,0
+20_K39,0,0
+21_Ca43,0,0
+22_Mn55,1,1
+23_Fe56,0,0
+24_Co59,1,1
+25_Ni60,0,0
+26_Cu65,0,0
+27_Zn66,0,0
+28_As75,1,1
+29_Se82,0,0
+30_Mo98,1,1
+31_Cd114,1,1
+32_<i>avrPphB</i>,0,0
+33_<i>avrRpm1</i>,0,0
+34_<i>avrRpt2</i>,0,0
+35_<i>avrB</i>,0,0
+39_0W,1,1
+40_2W,1,1
+41_4W,1,1
+42_8W,1,1
+43_FLC,1,1
+44_FRI,1,1
+45_8W GH FT,1,1
+46_8W GH LN,1,1
+47_0W GH FT,1,1
+48_0W GH LN,1,1
+57_FT Field,0,0
+58_FT Diameter Field,0,0
+59_FT GH,1,1
+60_FT Duration GH,1,1
+61_LC Duration GH,1,1
+62_LFS GH,1,1
+63_MT GH,0,0
+64_RP GH,0,0
+65_At1,0,1
+66_At1 CFU2,0,0
+67_As,0,1
+68_As CFU2,0,0
+69_Bs,0,1
+70_Bs CFU2,0,0
+71_At2,0,1
+72_At2 CFU2,0,0
+73_As2,0,1
+74_As2 CFU2,0,0
+75_FW ,1,1
+76_DW ,1,1
+77_LES,0,0
+78_YEL ,0,0
+79_LY ,0,0
+80_LN10,1,1
+81_LN16,1,1
+82_LN22,1,1
+158_Silique 16,0,0
+159_Silique 22,0,0
+161_Germ 10,0,0
+162_Germ 16,0,0
+163_Germ 22,1,1
+164_Width 10,1,1
+165_Width 16,0,0
+166_Width 22,0,0
+167_Chlorosis 10,0,0
+168_Chlorosis 16,0,0
+169_Chlorosis 22,0,0
+170_Anthocyanin 10,0,0
+171_Anthocyanin 16,0,0
+172_Anthocyanin 22,0,0
+173_Leaf serr 10,0,0
+174_Leaf serr 16,0,0
+175_Leaf serr 22,0,0
+176_Leaf roll 10,0,0
+177_Leaf roll 16,0,0
+178_Leaf roll 22,0,0
+179_Rosette Erect 22,0,0
+182_Hypocotyl length,1,1
+183_Trichome avg C,1,1
+184_Trichome avg JA,1,1
+185_Aphid number,0,0
+186_Bacterial titer,0,0
+272_Seedling Growth,0,0
+273_Vern Growth,0,0
+274_After Vern Growth,0,0
+277_Secondary Dormancy,0,1
+278_Germ in dark,0,0
+279_DSDS50,1,1
+280_Seed bank 133-91,0,0
+281_Storage 7 days,0,1
+282_Storage 28 days,0,1
+283_Storage 56 days,0,0
