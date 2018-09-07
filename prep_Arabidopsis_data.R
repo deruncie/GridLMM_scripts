@@ -17,4 +17,4 @@ dataset = list(
   map = map,
   phenotypes = phen
 )
-saveRDS(dataset,file = 'dataset.rds')
+saveRDS(dataset,file = 'Data/dataset.rds')

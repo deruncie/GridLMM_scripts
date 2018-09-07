@@ -8,7 +8,7 @@ library(foreach)
 LDAK_path = 'LDAK/ldak5'
 
 dataset = readRDS('Data/dataset.rds') # create with prep_Arabidopsis_data.R
-log_traits = fread('Datapheno_transforms.csv',data.table = F)
+log_traits = fread('Data/pheno_transforms.csv',data.table = F)
 
 phen = dataset$phenotypes
 map = dataset$map
