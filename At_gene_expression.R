@@ -6,7 +6,7 @@ library(doParallel)
 library(cowplot)
 library(rstan)
 # download file from: http://signal.salk.edu/1001.php
-exp = fread('GSE80744_ath1001_tx_norm_2016-04-21-UQ_gNorm_normCounts_k4.tsv',data.table=F,check.names = F)
+exp = fread('Data/At_1001/GSE80744_ath1001_tx_norm_2016-04-21-UQ_gNorm_normCounts_k4.tsv',data.table=F,check.names = F)
 
 rownames(exp) = exp[,1]
 exp = exp[,-1]
@@ -16,12 +16,12 @@ colnames(exp) = ACC_ID
 exp = as.matrix(exp)
 exp = exp[rowMeans(exp)>=10,]
 
-write.table(cbind(ACC_ID,ACC_ID),file = 'ACC_ID.txt',row.names=F,quote=F,col.names = F)
+# write.table(cbind(ACC_ID,ACC_ID),file = 'ACC_ID.txt',row.names=F,quote=F,col.names = F)
 
 # load kinship matrix from 1001 genomes
 # download file from: http://1001genomes.org/data/GMI-MPI/releases/v3.1/SNP_matrix_imputed_hdf5
-K_1001_accessions = fread('../Data/At_1001/1001_accessions.csv')
-K_1001 = fread('../Data/At_1001/1001_kinship.csv')
+K_1001_accessions = fread('Data/At_1001/1001_accessions.csv')
+K_1001 = fread('Data/At_1001/1001_kinship.csv')
 K_1001 = as.matrix(K_1001[,-1])
 rownames(K_1001) = colnames(K_1001) = K_1001_accessions$x
 
@@ -41,7 +41,7 @@ normalize_K = function(K){
   centered_K
 }
 K = normalize_K(K)
-write.csv(K,file = 'AT_GE_K.csv',row.names=T,col.names = T)
+write.csv(K,file = 'Data/At_1001/AT_GE_K.csv',row.names=T,col.names = T)
 
 # normalize data
 
@@ -51,27 +51,27 @@ design = model.matrix(~1,colData)
 dds = DESeqDataSetFromMatrix(countData = exp,colData = colData,design=~1)
 dds_vst = varianceStabilizingTransformation(dds,blind=T)
 vst_matrix = assay(dds_vst)
-fwrite(as.data.frame(vst_matrix),file = 'At_GE_VST.csv',row.names = T)
+fwrite(as.data.frame(vst_matrix),file = 'Data/At_1001/At_GE_VST.csv',row.names = T)
 
-K = read.csv('AT_GE_K.csv',check.names = F,row.names=1)
+K = read.csv('Data/At_1001/AT_GE_K.csv',check.names = F,row.names=1)
 K = as.matrix(K)
 
-vst_matrix = fread('At_GE_VST.csv',data.table=F,header = T)
+vst_matrix = fread('Data/At_1001/At_GE_VST.csv',data.table=F,header = T)
 rownames(vst_matrix) = vst_matrix[,1]
 vst_matrix = vst_matrix[,-1]
 vst_matrix = as.matrix(vst_matrix)
 
 data = data.frame(ACC_ID = rownames(K))
 
-K_epi = K*K
+K_E = K*K
 K = K/mean(diag(K))
-K_epi = K_epi/mean(diag(K_epi))
+K_E = K_E/mean(diag(K_E))
 data$ID2 = data$ACC_ID
 
 # prep GridLMM
 data$y = vst_matrix[1,]
 start = Sys.time()
-m_null = GridLMM_ML(y~(1|ACC_ID)+(1|ID2),data,relmat = list(ACC_ID = K,ID2 = K_epi),tolerance = 0.01,diagonalize = F)
+m_null = GridLMM_ML(y~(1|ACC_ID)+(1|ID2),data,relmat = list(ACC_ID = K,ID2 = K_E),tolerance = 0.01,diagonalize = F)
 
 h2_grid = t(setup_Grid(names(m_null$setup$RE_setup),h2_step = .05))
 
@@ -79,16 +79,18 @@ X_cov = model.matrix(~1,data)
 b = ncol(X_cov)+1
 n = nrow(data)
 X_indices_h2 = cbind(1:nrow(vst_matrix),0,0)
-res_h2 = foreach(h2 = iter(h2_grid,by='row')) %do% {
+registerDoParallel(10)
+res_h2 = foreach(h2 = iter(h2_grid,by='row')) %dopar% {
   print(h2)
   colnames(h2) = NULL
   chol_Vi_R = make_chol_V_setup(m_null$setup,h2)$chol_V
   SSs = GridLMM_SS_matrix(t(vst_matrix),chol_Vi_R,X_cov,list(),numeric(),rep(0,2))
   SSs = get_LL(SSs,X_cov,list(),numeric(),n,1,T,T,T)
-  res_i = data.frame(Trait = 1,X_ID = 1:nrow(SSs$beta_hats), REML_logLik = SSs$REMLs[,1], ID.REML = h2, 
+  res_i = data.frame(Trait = 1,X_ID = 1:nrow(SSs$beta_hats), REML_logLik = SSs$REML[1,], ID.REML = h2, 
                      LP = SSs$log_posterior_factor[,1],stringsAsFactors = F)
   return(res_i)
 }
+saveRDS(res_h2,file = 'At_1001_eqtl_GridLMM.rds')
 
 # results for grid when h2[2] == 0
 
@@ -98,8 +100,8 @@ res_h2 = compile_results(res_h2)
 Sys.time() - start
 
 h2_grid1 = h2_grid[h2_grid[,2] == 0,]
-res_LP_1 = res_h2_1
-res_h2_1 = compile_results(res_h2_1)
+res_LP_1 = res_LP[h2_grid[,2] == 0]
+res_h2_1 = compile_results(res_LP_1)
 
 # approximate student-t priors for variance components
 # translate these to discrete-grid prior on h2s
@@ -264,7 +266,7 @@ h2s_bm2 = data.frame(ACC_ID = samples[,1],ID2 = samples[,2]) * (1-const)
 # plots
 p1 = ggplot(res_h2,aes(x=ID.REML.1,y=ID.REML.2)) + geom_jitter(size = .1,alpha = 0.1) + 
   geom_point(data = res_h2[c(i1,i2),,drop=FALSE],aes(x=ID.REML.1,y=ID.REML.2),col='red',size=3) + 
-  xlab('K_A') + ylab('K_epi');p1
+  xlab('K_A') + ylab('K_E');p1
 h2_post$posterior = exp(lp_mat_uniform[i1,])
 p2 = ggplot(h2_post,aes(x=ACC_ID,y=ID2)) + xlim(c(0,1)) + ylim(c(0,1)) + 
   stat_density_2d(data = h2s_bm1,contour = T,size=.5,color='grey30',bins = 20) + 
@@ -318,7 +320,7 @@ prior_h2s = data.frame(K_A = prior_h2s[,1],K_E = prior_h2s[,2])
 p1=ggplot(prior_h2s,aes(x=K_A,y=K_E)) + ggtitle(expression(paste(sigma,'~half-t(3,0,10)'))) + 
   stat_density_2d(aes(fill = stat(density)),geom='raster',contour=F) + 
   theme(legend.position = 'none') # + stat_density_2d(bins=30)
-p2=ggplot(prior_h2s,aes(x=K_A)) + stat_density(fill=NA,color=1)
+p2=ggplot(prior_h2s,aes(x=K_A)) + stat_density(geom='line') + xlim(c(0,1))
 
 prior_draws = matrix(1/rgamma(3*1e5,shape=2,rate=1),ncol=3)
 prior_h2s = prior_draws/rowSums(prior_draws)
@@ -326,7 +328,7 @@ prior_h2s = data.frame(K_A = prior_h2s[,1],K_E = prior_h2s[,2])
 p3=ggplot(prior_h2s,aes(x=K_A,y=K_E)) + ggtitle(expression(paste(sigma^2,'~invGamma(2,1)'))) + 
   stat_density_2d(aes(fill = stat(density)),geom='raster',contour=F) + 
   theme(legend.position = 'none') # + stat_density_2d(bins=30)
-p4=ggplot(prior_h2s,aes(x=K_A)) + stat_density(fill=NA,color=1)
+p4=ggplot(prior_h2s,aes(x=K_A)) + stat_density(geom='line') + xlim(c(0,1))
 
 library(gtools)
 prior_h2s = data.frame(rdirichlet(1e5,rep(1,3)))
@@ -334,33 +336,84 @@ colnames(prior_h2s) = c('K_A','K_E','e')
 p5=ggplot(prior_h2s,aes(x=K_A,y=K_E)) + ggtitle(expression(paste(h^2,'~uniform(0,1)'))) + 
   stat_density_2d(aes(fill = stat(density)),geom='raster',contour=F) + 
   theme(legend.position = 'none') # + stat_density_2d(bins=30)
-p6=ggplot(prior_h2s,aes(x=K_A)) + stat_density(fill=NA,color=1)
+p6=ggplot(prior_h2s,aes(x=K_A)) + stat_density(geom='line') + xlim(c(0,1))
 
-p = plot_grid(p1,p2,p3,p4,p5,p6,nrow=3,ncol=2,labels = 'auto');#p
+p = plot_grid(p1,p2,p3,p4,p5,p6,nrow=3,ncol=2,labels = 'auto');p
 save_plot(plot=p,filename='AT_priors_comparison.pdf',base_aspect_ratio = 2/3,base_height=8)
 
 
 # LDAK
 
-LDAK_path = '../LDAK/ldak5' # change path to your LDAK program
-K_list = c(K_A = prep_LDAK_Kinship(K1,'K_A',LDAK_path),K_epi = prep_LDAK_Kinship(K_epi1,'K_epi',LDAK_path))
+LDAK_path = file.path('./../../home/deruncie/projects/GridLMM/Revision_sims/misc_software/ldak5') # change path to your LDAK program
+scratch = paste0('/scratch/deruncie')
+try(dir.create(scratch))
+setwd(scratch)
+
+
+LDAK_path = file.path('./../../../home/deruncie/projects/GridLMM/Revision_sims/misc_software/ldak5') # change path to your LDAK program
+folder = paste0('G',0)
+try(dir.create(folder))
+setwd(folder)
+K_list = c(K_A = prep_LDAK_Kinship(K,'../K_A',LDAK_path),K_E = prep_LDAK_Kinship(K_E,'../K_E',LDAK_path))
+setwd('..')
+system(sprintf('rm -rf %s',folder))
+
+r = foreach(i = 1:nrow(vst_matrix),.combine='rbind') %dopar% {
+  folder = paste0('G',i)
+  try(dir.create(folder))
+  setwd(folder)
+  data$y = vst_matrix[i,]
+  LDAK_call = prep_h2_LDAK(data$y,matrix(1,nrow(data)),K_list,LDAK_path,1000)
+  system(LDAK_call)
+  time_i = (Sys.time() - start)
+  total_time = total_time + time_i
+  res = fread('h2_LDAK.progress')
+  nIter = nrow(res)
+  times = rbind(times,data.frame(Time = time_i,nIter = nIter))
+  h2_start = get_LDAK_result(K_list)
+  setwd('..')
+  system(sprintf('rm -rf %s',folder))
+  h2_start
+}
+saveRDS(r,file = 'At_1001_eQTL_LDAK_h2s.rds')
+
+
+## estimate I/O
+
+
 r = matrix(0,nrow(vst_matrix),2)
 total_time = 0
+times = c()
 for(i in 1:nrow(vst_matrix)){
+  
   start = Sys.time()
   data$y = vst_matrix[i,]
   LDAK_call = prep_h2_LDAK(data$y,matrix(1,nrow(data)),K_list,LDAK_path,1000)
   system(LDAK_call)
-  total_time = total_time + (Sys.time() - start)
+  time_i = (Sys.time() - start)
+  total_time = total_time + time_i
+  res = fread('h2_LDAK.progress')
+  nIter = nrow(res)
+  times = rbind(times,data.frame(Time = time_i,nIter = nIter))
   h2_start = get_LDAK_result(K_list)
   r[i,] = h2_start
 }
+saveRDS(times,file = 'At_1001_eQTL_LDAK_times.rds')
+saveRDS(r,file = 'At_1001_eQTL_LDAK_h2s.rds')
+const = 0 # what is this?
+
+ldak_io_test = foreach(i = 1:3) %do% {
+  times = time_LDAK(vst_matrix[i,],matrix(1,nrow(data)),K_list,LDAK_path)
+}
+ldak_io_test_results = sapply(ldak_io_test,function(x) coef(lm(time~n_iter,x)))
+ldak_io_test_results[1,]/ldak_io_test_results[2,]
+ldak_io_test_results[1,]/(ldak_io_test_results[1,]+8*ldak_io_test_results[2,])  # estimate 6
 
 h2_A = data.frame(GridLMM=res_h2$ID.REML.1, LDAK = r[,1]*(1-const))
-h2_Epi = data.frame(GridLMM=res_h2$ID.REML.2, LDAK = r[,2]*(1-const))
+h2_E = data.frame(GridLMM=res_h2$ID.REML.2, LDAK = r[,2]*(1-const))
 
 p5 = ggplot(h2_A,aes(x=LDAK,y=GridLMM)) + geom_point(alpha = 0.1) + geom_abline(slope=1,intercept=0) + xlim(c(0,1)) + ylim(c(0,1)) + ggtitle('K_A');p5
-p6 = ggplot(h2_Epi,aes(x=LDAK,y=GridLMM)) + geom_point(alpha = 0.1) + geom_abline(slope=1,intercept=0) + xlim(c(0,1)) + ylim(c(0,1)) + ggtitle('K_epi');p6
+p6 = ggplot(h2_E,aes(x=LDAK,y=GridLMM)) + geom_point(alpha = 0.1) + geom_abline(slope=1,intercept=0) + xlim(c(0,1)) + ylim(c(0,1)) + ggtitle('K_E');p6
 p = plot_grid(p5,p6,labels = 'auto')
 save_plot(p,base_aspect_ratio = 2,filename = 'AT_GE_LDAK_comparison.pdf')
 

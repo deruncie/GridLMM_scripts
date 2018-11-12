@@ -1,1 +1,8 @@
 .DS_Store
+Data/At_1001/*
+Data/Atwell/*.rds
+Data/WTCC/*
+Figures/*
+Results/*
+misc_software/*
+

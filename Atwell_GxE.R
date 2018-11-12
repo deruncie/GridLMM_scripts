@@ -5,10 +5,11 @@ library(sommer)
 library(snpStats)
 library(reshape2)
 library(foreach)
-LDAK_path = 'LDAK/ldak5'
 
-dataset = readRDS('Data/dataset.rds') # create with prep_Arabidopsis_data.R
-log_traits = fread('Data/pheno_transforms.csv',data.table = F)
+LDAK_path = 'misc_software/ldak5' # set path to LDAK program
+
+dataset = readRDS('Data/Atwell/dataset.rds') # create with prep_Arabidopsis_data.R
+log_traits = fread('Data/Atwell/pheno_transforms.csv',data.table = F)
 
 phen = dataset$phenotypes
 map = dataset$map
@@ -54,7 +55,15 @@ method_times = c()
 all_results = data.frame(X_ID = colnames(X))
 
 # ---------- LDAK ----------- #
+# force the number of iterations of the optimization algorithm to change to estimate I/O limits to time
+ldak_io_test = foreach(i = 1:3) %do% {
+  times = time_LDAK(phen_tall$value,X_cov,K_list,LDAK_path)
+}
+ldak_io_test_results = sapply(ldak_io_test,function(x) coef(lm(time~n_iter,x)))
+ldak_io_test_results[1,]/ldak_io_test_results[2,]
+ldak_io_test_results[1,]/(ldak_io_test_results[1,]+11*ldak_io_test_results[2,])
 
+# 
 ldak_times = foreach(i = 1:10,.combine = 'c') %do% {
   start = Sys.time()
   h2_start = get_h2_LDAK(phen_tall$value,X_cov,K_list,LDAK_path,weights = sapply(Ks,function(x) mean(diag(x))))

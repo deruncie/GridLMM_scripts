@@ -1,0 +1,373 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(reshape2)
+library(ggplot2)
+library(cowplot)
+# plot themes
+t = theme(legend.title = element_blank(), legend.position = c(.99,0.01),legend.justification = c(1,0)) 
+g = guides(colour = guide_legend(override.aes = list(size=4,shape=15)))
+```
+
+## Figure 1
+This figure shows results of analysis of flowering time data from Atwell
+
+### 1a
+We shows that Grid-LMM gives similar results to GEMMA for 1-RE models
+
+```{r}
+trait = 7
+# results = readRDS(sprintf('Results/Atwell_oneTrait/results_%03d.rds',trait))
+results = readRDS(sprintf('Results/Atwell_oneTrait/results_%03db.rds',trait)) # this version uses non-log transformed data
+```
+
+```{r}
+results_wide = data.frame(-log10(do.call(cbind,lapply(results[c('results_GEMMA','results_EMMAX','results_0.1','results_0.01')],function(x) x$p_value_REML))))
+# i = sample(1:nrow(results_wide),20000)
+# results_wide= results_wide[i,]
+colnames(results_wide) = c('GEMMA','EMMAX','Grid-LMM(0.1)','Grid-LMM(0.01)')
+results_tall = melt(results_wide,id.vars='GEMMA')
+limits = range(results_wide)
+p_1a = ggplot(results_tall,aes(x=GEMMA,y=value)) + 
+  ggtitle('DTF at 10C')+
+  geom_abline(slope=1,intercept = 0) + 
+  geom_point(aes(color = variable),size = 0.8) + 
+  xlab(expression(-log[10]~"(p)"~GEMMA)) +
+  ylab(expression(-log[10]~"(p)")) +
+  coord_cartesian(xlim = limits,ylim=limits) + 
+  t + g;p_1a
+```
+
+### 1b
+We show that accounting for GxE background is important for GxE tests, and Grid-LMM has an advantage over Sul's method
+```{r}
+results = readRDS('Results/Atwell_GxE/Atwell_GxE_X5_FT10_X57_FT.Field.rds')
+```
+
+```{r}
+results_wide = -log10(data.frame(
+                          GEMMA = results$GEMMA$p_value_REML,
+                          `Grid-LMM(0.01)-A` = results$Grid_GxE_noK_GxE$p_value_REML.2,
+                          `null-LMM-GxE` = results$Sul_GxE_GxE$p_value_REML.2,
+                          `Grid-LMM(0.01)-GxE` = results$Grid_GxE_GxE$p_value_REML.2
+                        ,check.names=F))
+# i = sample(1:nrow(results_wide),20000)
+# results_wide= results_wide[i,]
+results_tall = melt(results_wide,id.vars='GEMMA')
+limits = range(results_wide)
+p_1b = ggplot(results_tall,aes(x=GEMMA,y=value)) + 
+  ggtitle('DTF (Field vs 10C)')+
+  geom_abline(slope=1,intercept = 0) + 
+  geom_point(aes(color = variable),size = 0.8) + 
+  xlab(expression(-log[10]~"(p)"~GEMMA)) +
+  ylab(expression(-log[10]~"(p)")) +
+  coord_cartesian(xlim = limits,ylim=limits) + 
+  t + g;p_1b
+```
+## a+b
+```{r}
+p_1 = plot_grid(p_1a,p_1b,nrow = 1,labels = c('a','b'));p_1
+save_plot('Figures/Figure_1.png',p_1,base_aspect_ratio = 2.5)
+
+```
+
+## Figure 2
+This figure shows the results of analysis of bodyweight from the WTCC mice data
+
+```{r}
+library(data.table)
+# load('Data/WTCC/MousePheno.RData')
+map = fread('Data/WTCC/Mice_map_Plos_T5.csv',data.table = F)
+# all_traits = do.call(c,lapply(names(Pheno),function(x) paste(x,colnames(Pheno[[x]]),sep='::')))
+# trait = 44
+# results = readRDS(sprintf('Results/WTCC_oneTrait/results_%03d.rds',trait))
+results = readRDS('Results/WTCC_oneTrait/WTCC_results.rds')
+results$X_ID = as.character(results$X_ID)
+```
+
+```{r}
+results$chr = factor(map$chromosome[match(substr(results$X_ID,1,nchar(results$X_ID)-2),map$marker)])
+results$cpos = 1:nrow(results)
+results = results[1:(min(which(results$chr == 'X'))-1),]
+dim(results)
+
+results[,-c(1,8,10,11)] = -log10(results[,-c(1,8,10,11)])
+par(mfrow=c(3,1))
+ylim = c(0,max(results$grid_AEcage))
+
+# plot(results_p$Grid_A,pch=21,bg = c('grey30','grey70')[as.numeric(results_p$chr) %% 2 + 1],col=NA,cex=.6,ylim=ylim,ylab = expression(-log[10]~"(p)"),
+#      xaxt='n',xlab='',main = sprintf('%s\n A-only',strsplit(all_traits[trait],'::')[[1]][2]))
+# axis(1,at=chr_pos,labels = names(chr_pos))
+# 
+# plot(results_p$Grid_ADE,pch=21,bg = c('grey30','grey70')[as.numeric(results_p$chr) %% 2 + 1],col=NA,cex=.6,ylim=ylim,ylab = expression(-log[10]~"(p)"),
+#      xaxt='n',xlab='',main = 'A+D+E')
+# axis(1,at=chr_pos,labels = names(chr_pos))
+# 
+# 
+# results_p = -log10(data.frame(Grid_A = results$grid_A, Grid_AE = results$grid_AE, Grid_Acage = results$grid_Acage, Grid_AEcage = results$grid_AEcage, pylmm = results$grid_AEcage_pylmm))
+# results_BF = data.frame(BF = results$grid_AEcage_BF)
+# # results_p = data.frame(-log10(do.call(cbind,lapply(results[c('GEMMA','Grid_A','Grid_ADE','Grid_ADE_null')],function(x) x$p_value_REML))))
+# # results_BF = data.frame(cbind(GEMMA_1 = results$GEMMA$ABF_1, GEMMA_2 = results$GEMMA$ABF_2, Grid_A = results$Grid_A_BF$BF*log10(exp(1)), Grid_ADE = results$Grid_ADE_BF$BF*log10(exp(1))))
+# 
+#     par(mfrow=c(3,1))
+#     
+#     results_p$chr = factor(factor(map$chromosome[match(substr(results$Grid_A$X_ID,1,nchar(results$Grid_A$X_ID)-2),map$marker)]))
+#     results_p$cpos = 1:nrow(results_p)
+#     chr_pos = tapply(results_p$cpos,results_p$chr,mean)
+#     ylim = c(0,max(results_p[,c('Grid_A','Grid_ADE')],na.rm=T))
+#     plot(results_p$Grid_A,pch=21,bg = c('grey30','grey70')[as.numeric(results_p$chr) %% 2 + 1],col=NA,cex=.6,ylim=ylim,ylab = expression(-log[10]~"(p)"),
+#          xaxt='n',xlab='',main = sprintf('%s\n A-only',strsplit(all_traits[trait],'::')[[1]][2]))
+#     axis(1,at=chr_pos,labels = names(chr_pos))
+#     plot(results_p$Grid_ADE,pch=21,bg = c('grey30','grey70')[as.numeric(results_p$chr) %% 2 + 1],col=NA,cex=.6,ylim=ylim,ylab = expression(-log[10]~"(p)"),
+#          xaxt='n',xlab='',main = 'A+D+E')
+#     axis(1,at=chr_pos,labels = names(chr_pos))
+#     
+#     results_BF$chr = factor(factor(map$chromosome[match(substr(results$Grid_A$X_ID,1,nchar(results$Grid_A$X_ID)-2),map$marker)]))
+#     results_BF$cpos = 1:nrow(results_BF)
+#     chr_pos = tapply(results_BF$cpos,results_BF$chr,mean)
+#     ylim = range(results_BF[,'Grid_ADE'],na.rm=T)
+#     plot(results_BF$Grid_ADE,pch=21,bg = c('grey30','grey70')[as.numeric(results_BF$chr) %% 2 + 1],col=NA,cex=.6,ylim=ylim,ylab = expression(-log[10]~"BF"),
+#          xaxt='n',xlab='Chr',main = 'BF: A+D+E')
+#     axis(1,at=chr_pos,labels = names(chr_pos))
+#     
+```
+
+```{r}
+results$color = c('grey30','grey70')[as.numeric(results$chr) %% 2 + 1]
+ylim = c(0,6) #max(results[,c('grid_A','grid_AEcage')],na.rm=T)
+chr_pos = tapply(results$cpos,results$chr,mean)
+
+p_2a = ggplot(subset(results,!is.na(chr)),aes(x=cpos,y=grid_A)) +  
+  geom_hline(yintercept = c(2,4,6),size=.1) +
+  geom_point(aes(color= I(color)),size = 0.8) + 
+  xlab('') + ylim(ylim) +
+  ylab(expression(-log[10]~"(p)")) +
+  scale_x_continuous(breaks = chr_pos,labels = names(chr_pos)) + 
+  annotate("text", x = 100, y = 5, hjust = 0, label = "A only",size=5) +
+  t + theme(legend.position="none");p_2a
+
+
+p_2b = ggplot(subset(results,!is.na(chr)),aes(x=cpos,y=grid_AEcage)) +  
+  geom_hline(yintercept = c(2,4,6),size=.1) +
+  geom_point(aes(color= I(color)),size = 0.8) + 
+  xlab('') + ylim(ylim) +
+  ylab(expression(-log[10]~"(p)")) +
+  scale_x_continuous(breaks = chr_pos,labels = names(chr_pos)) + 
+  annotate("text", x = 100, y = 5, hjust = 0,label = "A+E+Cage",size=5) +
+  t + theme(legend.position="none");p_2b
+
+p_2c = ggplot(subset(results,!is.na(chr)),aes(x=cpos,y=grid_AEcage_BF)) +  
+  geom_hline(yintercept = c(1,3),size=.1) +
+  geom_point(aes(color= I(color)),size = 0.8) + 
+  xlab('Chromosome') + #ylim(ylim) +
+  ylab(expression(log[10]~"(BF)")) +
+  scale_x_continuous(breaks = chr_pos,labels = names(chr_pos)) + 
+  annotate("text", x = 100, y = 2.5, hjust = 0,label = "A+E+Cage",size=5) +
+  t + theme(legend.position="none");p_2c
+
+```
+```{r}
+ylim = c(0,max(results$grid_AEcage))
+u = runif(nrow(results))
+qq = data.frame(Expected = sort(-log10(u)),Observed = sort(results$grid_A))
+p_2d = ggplot(qq,aes(x=Expected,y=Observed)) + geom_point(size=.5) + geom_abline(slope=1,intercept=0) +
+  xlim(ylim) + ylim(ylim);p_2d
+
+qq = data.frame(Expected = sort(-log10(u)),Observed = sort(results$grid_AEcage))
+p_2e = ggplot(qq,aes(x=Expected,y=Observed)) + geom_point(size=.5) + geom_abline(slope=1,intercept=0) +
+  xlim(ylim) + ylim(ylim);p_2e
+```
+
+
+```{r}
+p2 = plot_grid(p_2a,p_2d,p_2b,p_2e,p_2c,ncol=2,labels = c('a','b','c','d','e'),hjust = 0.,rel_widths = c(3,1));p2
+save_plot('Figures/Figure_2.pdf',p2,base_width = 8)
+```
+
+## Power analysis
+Two figures:
+
+1. Power by variance components and effect size
+2. Null distribution of p-values by variance components
+```{r}
+library(ggplot2)
+library(cowplot)
+library(reshape2)
+library(gridExtra)
+results = readRDS('Results/Atwell_power_Wald/compiled_results.rds')
+colnames(results)[8:15] = c('exact-LMM-G','exact-LMM-GxE','exact-LMM-G+GxE','GEMMA_plasticity','null-LMM','Grid-LMM(0.1)','Grid-LMM(0.05)','Grid-LMM(0.01)')
+```
+
+
+### Null-distribution
+```{r}
+n_full = 316
+models = c('exact-LMM-G+GxE','exact-LMM-G','exact-LMM-GxE','null-LMM','Grid-LMM(0.1)')
+ordered_results = subset(results,prop_var == 0)
+ordered_results = ordered_results[,c('G','GxE',models)]
+ordered_results$expected = NA
+genomic_controls = c()
+for(i in unique(ordered_results$G)) {
+  for(j in unique(ordered_results$GxE)) {
+    index = ordered_results$G ==i & ordered_results$GxE == j
+    if(sum(index)>0) {
+      ordered_results$expected[index] = -log10(qunif(ppoints(sum(index))))
+      for(m in models){ 
+        ps = ordered_results[[m]][index]
+        ordered_results[[m]][index] = sort(ps,decreasing = T)
+        genomic_controls = rbind(genomic_controls,data.frame(G = i,GxE = j, model = m,Lambda = median(qf(10^(-ps),1,n_full-4,lower.tail=F))/qf(0.5,1,n_full-4)))
+      }
+    }
+  }
+}
+ordered_results_comparison = melt(ordered_results,id.vars = c('G','GxE','expected'),measure.vars = c('exact-LMM-G+GxE','exact-LMM-G','exact-LMM-GxE','null-LMM','Grid-LMM(0.1)')) #'p_2','p_6','p_7','p_3','p_4','p_5','p_3','p_4','p_5','p_8','p_9'
+limits = range(c(ordered_results_comparison$expected,ordered_results_comparison$value))
+ylim = c(0,max(ordered_results_comparison$value))
+xlim = c(0,max(ordered_results_comparison$expected))
+p = ggplot(ordered_results_comparison,aes(x=expected,y=value,group=variable)) +
+        geom_abline(slope=1,intercept=0) +
+        geom_point(aes(color = variable),size=0.5,alpha = 0.2) +
+        # geom_smooth(aes(color = variable),se=T,span=0.1,size=1) +
+        facet_grid(G~GxE,labeller = 'label_both',scales='free') + 
+        guides(colour = guide_legend(override.aes = list(size=4,shape=15,alpha=1))) +
+        xlab(expression('Expected '~-log[10]~'p value')) + ylab(expression('Observed '~-log[10]~'p value')) + coord_cartesian() +  
+        xlim(xlim) + ylim(ylim) + 
+        theme_bw() + theme(legend.title = element_blank())
+
+g = plot_to_gtable(p)
+g = gtable_remove_grobs(g,c("panel-2-3", "panel-3-2", "panel-3-3", "strip-t-2-3", "strip-t-3-2", "strip-t-3-3"))
+## move axis closer to panel
+g$layout[g$layout$name == "axis-b-3", c("t", "b")] = c(14, 9)
+g$layout[g$layout$name == "axis-b-2", c("t", "b")] = c(14, 11)
+# g$layout[g$layout$name == "strip-r-2", c("t", "l")] = c(10,6)
+# g$layout[g$layout$name == "strip-r-3",c("t", "l")] = c(11,1)
+g$layout[g$layout$name == "guide-box", c("t","r","b","l")] = c(10,8,14,13)
+g = gtable_squash_cols(g,13:17)
+
+g2 = g
+plot(g2)
+# save_plot(g2,file = 'Power_analysis_null.pdf',base_height = 6)
+
+ylim = c(0,max(genomic_controls$Lambda))
+p = ggplot(genomic_controls,aes(x=model,y=Lambda)) +
+        geom_hline(yintercept = 1) +
+        geom_bar(aes(fill = model),stat='identity') +
+        # geom_point(aes(color = variable),size=0.5,alpha = 0.2) +
+        # geom_smooth(aes(color = variable),se=T,span=0.1,size=1) +
+        facet_grid(G~GxE,labeller = 'label_both',scales='free') + 
+        guides(colour = guide_legend(override.aes = list(size=4,shape=15,alpha=1))) +
+        # xlab(expression('Expected '~-log[10]~'p value')) + 
+        ylab(expression(lambda)) + 
+        coord_cartesian() +  
+        # xlim(xlim) + 
+        ylim(ylim) + 
+        theme_bw() + theme(legend.title = element_blank(),axis.text.x = element_text(angle = 90, hjust = 1))
+
+g = plot_to_gtable(p)
+g = gtable_remove_grobs(g,c("panel-2-3", "panel-3-2", "panel-3-3", "strip-t-2-3", "strip-t-3-2", "strip-t-3-3"))
+## move axis closer to panel
+g$layout[g$layout$name == "axis-b-3", c("t", "b")] = c(14, 9)
+g$layout[g$layout$name == "axis-b-2", c("t", "b")] = c(14, 11)
+# g$layout[g$layout$name == "strip-r-2", c("t", "l")] = c(10,6)
+# g$layout[g$layout$name == "strip-r-3",c("t", "l","r")] = c(12,1,9)
+g$layout[g$layout$name == "guide-box", c("t","r","b","l")] = c(11,8,14,13)
+g = gtable_squash_cols(g,13:17)
+
+g2 = g
+plot(g2)
+save_plot(g2,file = 'Figures/Power_analysis_lambda.pdf',base_height = 6)
+```
+
+### Power
+```{r}
+results_focal = results[,c('G','GxE','prop_var',models)]
+for(i in unique(results_focal$G)) {
+  for(j in unique(results_focal$GxE)) {
+    index = results_focal$G ==i & results_focal$GxE == j
+    if(sum(index)>0) {
+      for(m in models){ 
+        index_lambda = with(genomic_controls,G==i& GxE==j & model == m)
+        # print(sum(index_lambda))
+        log_ps = -results_focal[index,m]/log10(exp(1))
+        fs = qf(log_ps,1,n_full-4,lower.tail=F,log.p = T)
+        fs = fs/genomic_controls$Lambda[index_lambda]
+        results_focal[index,m] = -log10(pf(fs,1,n_full-4,lower.tail=F))
+      }
+    }
+  }
+}
+results_summary = aggregate(results_focal[,c('exact-LMM-G+GxE','exact-LMM-G','exact-LMM-GxE','null-LMM','Grid-LMM(0.1)')],by=list(G=results$G,GxE = results$GxE,prop_var=results$prop_var),FUN = function(x) mean(x > -log10(2e-7))) #4e-6,p_3,p_4,p_5,p_8 #-log10(2.6e-8)p_1b,,p_8,p_9
+results_summary_tall = melt(subset(results_summary,prop_var != 0.01),id.vars = c('G','GxE','prop_var'))
+results_summary_tall$prop_var = factor(results_summary_tall$prop_var)
+p = ggplot(results_summary_tall,aes(x=prop_var,y=value,group=variable)) + 
+      geom_col(aes(fill = variable),position = position_dodge()) + 
+      facet_grid(G~GxE,labeller = 'label_both') + 
+      xlab('Fraction of variance due to marker') + ylab(expression('Power with '~alpha~'= 2e-7')) +
+      theme_bw() + theme(legend.title = element_blank())
+g = plot_to_gtable(p)
+g = gtable_remove_grobs(g,c("panel-2-3", "panel-3-2", "panel-3-3", "strip-t-2-3", "strip-t-3-2", "strip-t-3-3"))
+## move axis closer to panel
+g$layout[g$layout$name == "axis-b-3", c("t", "b")] = c(14, 9)
+g$layout[g$layout$name == "axis-b-2", c("t", "b")] = c(14, 11)
+# g$layout[g$layout$name == "strip-r-2", c("t", "l")] = c(10,6)
+# g$layout[g$layout$name == "strip-r-3",c("t", "l","r")] = c(12,1,9)
+g$layout[g$layout$name == "guide-box", c("t","r","b","l")] = c(10,8,14,13)
+g = gtable_squash_cols(g,13:17)
+
+g1 = g
+plot(g1)
+save_plot(g1,file = 'Figures/Power_analysis_power.pdf',base_height = 6)
+```
+
+
+## Grid-LMM performance in Atwell
+```{r}
+library(data.table)
+library(reshape2)
+errors = fread('Results/Atwell_oneTrait/errors.csv',data.table = F)
+MSEs = errors[,4:6]
+colnames(MSEs) = c('RMSE-Grid-LMM(0.01)','RMSE-Grid-LMM(0.1)','RMSE-EMMAX')
+
+p1 = ggplot(MSEs,aes(x=`RMSE-Grid-LMM(0.01)`,y=`RMSE-Grid-LMM(0.1)`)) + geom_abline(slope=1,intercept = 0)  + geom_point()
+p2 = ggplot(MSEs,aes(x=`RMSE-Grid-LMM(0.01)`,y=`RMSE-EMMAX`)) + geom_abline(slope=1,intercept = 0) + geom_point()
+p3 = ggplot(MSEs,aes(x=`RMSE-Grid-LMM(0.1)`,y=`RMSE-EMMAX`)) + geom_abline(slope=1,intercept = 0) + geom_point()
+p = plot_grid(p1,p3,p2,NULL,nrow=2,ncol=2);p
+save_plot(p,file = 'Figures/Atwell_RMSEs.pdf',base_height = 5)
+```
+
+## WTCC SNP table
+```{r}
+trait = 44
+results = readRDS(sprintf('Results/WTCC_oneTrait/results_%03d.rds',trait))$Grid_ADE
+results$X_ID = sapply(results$X_ID,function(x) strsplit(x,'_')[[1]][1])
+map = fread('Data/WTCC/Mice_map_Plos_T5.csv',data.table=F)
+results$chr = map$chromosome[match(results$X_ID,map$marker)]
+results$bp = map$bp[match(results$X_ID,map$marker)]
+results$cM = map$cM[match(results$X_ID,map$marker)]
+
+# 
+# map = fread('Data/WTCC/final-9-2-5.csv',data.table=F)
+# results$chr = map$Chr[match(results$X_ID,map$SNP_Name)]
+# results$bp = map$Coordinate[match(results$X_ID,map$SNP_Name)]
+```
+
+```{r}
+top_results = subset(results,chr != 'X' & p_value_REML < 1e-3)
+top_results = data.frame(marker = top_results$X_ID, Chromosome = top_results$chr, bp = top_results$bp, cM = top_results$cM,
+                         `Effect Size` = top_results$beta.2, `-log10(p)` = -log10(top_results$p_value_REML),check.names = F)
+top_results
+```
+```{r}
+top_results$Reference = ''
+top_results$Notes = ''
+
+top_results$Reference[top_results$marker %in% c('rs4224463','rs6313392','rs3665393','rs3668228')] = '\cite{Liu:2013ka}'
+top_results$Notes[top_results$marker == 'rs13481023'] = 'Associated with Tibia length in LG,SM Advanced Intercross mice'
+top_results$Reference[top_results$marker == 'rs13481023'] = '\cite{Norgard:2009ea}'
+top_results$Notes[top_results$marker == 'rs13481023'] = 'Associated with Tibia length in LG,SM Advanced Intercross mice'
+top_results$Gene[c(1,2,3,5)] = c('Exosc3','Dcaf10','Shb','Shb')
+
+```
+

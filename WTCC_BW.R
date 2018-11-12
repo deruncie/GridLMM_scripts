@@ -7,7 +7,7 @@ library(doParallel)
 library(sommer)
 library(lme4)
 
-LDAK_path = '../LDAK/ldak5' # set path to LDAK program
+LDAK_path = 'misc_software/ldak5' # set path to LDAK program
 
 data(mice,package='BGLR')
 
@@ -17,7 +17,7 @@ trait_data$ID2 = trait_data$ID3 = trait_data$ID
 trait_X = mice.X
 
 # download map (Table S5, convert to csv): https://journals.plos.org/plosbiology/article/file?type=supplementary&id=info:doi/10.1371/journal.pbio.0040395.st005
-map = fread('../Data/WTCC/Mice_map_Plos_T5.csv',data.table = F)
+map = fread('Data/WTCC/Mice_map_Plos_T5.csv',data.table = F)
 colnames(trait_X) = substr(colnames(trait_X),1,nchar(colnames(trait_X))-2)
 map = subset(map,chromosome != 'X' & marker %in% colnames(trait_X))
 trait_X = trait_X[,match(subset(map,chromosome != 'X')$marker,colnames(trait_X))]
@@ -39,11 +39,16 @@ X_cov = model.matrix(~GENDER,trait_data)
 get_h2_LDAK(trait_data$y,X_cov,K_list[1:2],LDAK_path)
 
 
-
 method_times = c()
 all_results = data.frame(X_ID = colnames(trait_X))
 
 # ---------- LDAK ----------- #
+# force the number of iterations of the optimization algorithm to change to estimate I/O limits to time
+ldak_io_test = foreach(i = 1:3) %do% {
+  times = time_LDAK(trait_data$y,cbind(X_cov,trait_X[,i]),K_list[c(1,2,3)],LDAK_path)
+}
+ldak_io_test_results = sapply(ldak_io_test,function(x) coef(lm(time~n_iter,x)))
+# 
 
 ldak_times = foreach(i = 1:10,.combine = 'c') %do% {
   start = Sys.time()
@@ -134,4 +139,6 @@ results_list = list(
 )
 saveRDS(results_list,file = 'WTCC_all_results.rds')
 
+# calculate genomic control values:
+sapply(results_list,function(x) median(x$results$F.1)/qf(0.5,1,nrow(trait_data)-2))
 

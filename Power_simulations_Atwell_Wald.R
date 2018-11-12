@@ -10,15 +10,30 @@
 
 run = commandArgs(t=T)[1]
 if(is.na(run)) run = 1
+run_folder = paste0('Run_',run)
+try(dir.create(run_folder))
+setwd(run_folder)
 
 # use the sommer package for calculations (only REML)
-library(lme4qtl)
-library(lme4)
+# library(lme4qtl)
+# library(lme4)
 library(foreach)
 library(doParallel)
-library(GxEMMA)
+library(GridLMM)
 library(reshape2)
 library(sommer)
+library(data.table)
+
+
+h2s = as.matrix(expand.grid(G = c(0,0.4,.8), GxE = c(0,0.4,.8)))
+h2s = h2s[rowSums(h2s) < 1,]
+
+prop_vars = c(0,0.01,0.025,0.05,0.1,0.15,0.2)
+nReps = 100
+foreach(rep = 1:nReps) %do% {
+  try(dir.create(sprintf('Rep_%d',rep)))
+}
+
 
 nearest_h2 = function(h2,all_h2s){
   dist = rowSums(sweep(all_h2s,2,h2,'-')^2)
@@ -43,7 +58,7 @@ all_h2s100 = all_h2s
 
 # Load the dataset
 
-dataset = readRDS('Data/dataset.rds')
+dataset = readRDS('../Data/Atwell/dataset.rds')
 
 phen = dataset$phenotypes
 map = dataset$map
@@ -87,6 +102,16 @@ ZK_g = Z_eco %*% t(chol_K)
 ZK_gxe = (Z_trt*ZK_g)
 ZK_gxe_plasticity = Z_plasticity %*% t(chol_K)
 
+LDAK_path = '../../misc_software/ldak5'
+K_g = K_g
+K_gxe = K_gxe
+setwd('Rep_1')
+K_list = c(K_g = prep_LDAK_Kinship(K_g,'../K_g',LDAK_path),K_gxe = prep_LDAK_Kinship(K_gxe,'../K_gxe',LDAK_path))
+K_weights = c(mean(diag(K_g)),mean(diag(K_gxe)))
+
+K_phen = c(K = prep_LDAK_Kinship(K[phen$ecotype_id,phen$ecotype_id],'../K',LDAK_path))
+K_phen_weight = mean(diag(K[phen$ecotype_id,phen$ecotype_id]))
+setwd('..')
 
 sK = svd(K)
 U = sK$u
@@ -100,11 +125,6 @@ sK_gxe = svd(K_gxe)
 d_gxe = diag(sK_gxe$d)
 rownames(d_g) = colnames(d_g) = rownames(d_gxe) = colnames(d_gxe) = phen_tall$ID
 
-h2s = as.matrix(expand.grid(G = c(0,0.4,.8), GxE = c(0,0.4,.8)))
-h2s = h2s[rowSums(h2s) < 1,]
-
-prop_vars = c(0,0.01,0.025,0.05,0.1,0.15,0.2)
-nReps = 4
 colnames(X) = 1:ncol(X)
 X = X[,sample(1:ncol(X),nReps)]
 
@@ -124,10 +144,12 @@ get_F = function(h2s,Vs,y,x,X_cov){
   for(i in 1:length(h2s)) V = V + h2s[i]*Vs[[i]]
   chol_V = chol(V)
   V_log_det = 2*sum(log(diag(chol_V)))
-  calc_LL(matrix(y,dimnames = list(c(),1)),X_cov = matrix(X_cov,n),X_list = lapply(1:ncol(x),function(i) x[,i,drop=FALSE]),h2s = 1,chol_Vi = chol_V,V_log_det = V_log_det,
+  calc_LL(matrix(y,dimnames = list(c(),1)),X_cov = matrix(X_cov,n),X_list = lapply(1:ncol(x),function(i) x[,i,drop=FALSE]),h2s = 1,chol_Vi = chol_V,
           inv_prior_X = rep(0,4),downdate_Xs = NULL,n_SNPs_downdated_RRM = NULL,REML = T,BF = F)
 }
 
+
+# LDAK_path = paste0('../',LDAK_path)
 registerDoParallel(my_detectCores())
 results = foreach(h2 = iter(h2s,by='row'),.combine = 'rbind') %do% {
   foreach(prop_var = prop_vars,.combine = 'rbind') %do% {
@@ -148,41 +170,49 @@ results = foreach(h2 = iter(h2s,by='row'),.combine = 'rbind') %do% {
       phen$plasticity = tapply(phen_tall$y,phen_tall$ecotype_id,function(x) x[2]-x[1])[phen$ecotype_id]
       phen$x = x
       
-      
+      setwd(sprintf('Rep_%d',rep))
       X_tall = model.matrix(~x*variable,phen_tall)
       X_plasticity = model.matrix(~x,phen)
-      
+      X_cov = model.matrix(~variable+x+variable:x,phen_tall)
+      X_variable = model.matrix(~variable,phen_tall)
       # 1RE model - ecotype_id
-      lm1 = mmer2(y~variable+x+variable:x,random = ~g(ecotype_id),data = phen_tall,G = list(ecotype_id = K),iters = 100,silent = T)
-      lm1_F = get_F(get_h2_sommer(lm1),list(K_g),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
+      # lm1 = mmer2(y~variable+x+variable:x,random = ~g(ecotype_id),data = phen_tall,G = list(ecotype_id = K),iters = 100,silent = T)
+      h21 = get_h2_LDAK(phen_tall$y,X_cov,K_list[1],LDAK_path,weights = K_weights[1])
+      lm1_F = get_F(h21,list(K_g),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
       
       # 1RE model - ecotype_id x env
-      lm1b = mmer2(y~variable+x+variable:x,random = ~g(ID),data = phen_tall,G = list(ID = K_gxe),iters = 100,silent = T)
-      lm1b_F = get_F(get_h2_sommer(lm1b),list(K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
+      # lm1b = mmer2(y~variable+x+variable:x,random = ~g(ID),data = phen_tall,G = list(ID = K_gxe),iters = 100,silent = T)
+      h21b = get_h2_LDAK(phen_tall$y,X_cov,K_list[2],LDAK_path,weights = K_weights[2])
+      lm1b_F = get_F(h21b,list(K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
 
       # # 2RE model
-      lm2 = mmer2(y~variable+x+variable:x,random = ~g(ecotype_id) + g(ID),data = phen_tall,G = list(ecotype_id = K, ID = K_gxe),iters = 100,silent = T)
-      lm2_0 = mmer2(y~variable,random = ~g(ecotype_id) + g(ID),data = phen_tall,G = list(ecotype_id = K, ID = K_gxe),iters = 100,silent = T)
-      lm2_F = get_F(get_h2_sommer(lm2),list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
+      # lm2 = mmer2(y~variable+x+variable:x,random = ~g(ecotype_id) + g(ID),data = phen_tall,G = list(ecotype_id = K, ID = K_gxe),iters = 100,silent = T)
+      # lm2_0 = mmer2(y~variable,random = ~g(ecotype_id) + g(ID),data = phen_tall,G = list(ecotype_id = K, ID = K_gxe),iters = 100,silent = T)
+      h22 = get_h2_LDAK(phen_tall$y,X_cov,K_list,LDAK_path,weights = K_weights)
+      h20 = get_h2_LDAK(phen_tall$y,X_variable,K_list,LDAK_path,weights = K_weights)
+      lm2_F = get_F(h22,list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
 
       # 1RE plasticity
-      lm_plasticity = mmer2(plasticity~x,random=~g(ecotype_id),data=phen,G = list(ecotype_id = K[phen$ecotype_id,phen$ecotype_id]),iters = 100,silent = T)
-      lm_plasticity_F = get_F(get_h2_sommer(lm_plasticity),list(K[phen$ecotype_id,phen$ecotype_id]),phen$plasticity,X_plasticity[,2,drop=FALSE],X_plasticity[,1,drop=FALSE])$F
+      # lm_plasticity = mmer2(plasticity~x,random=~g(ecotype_id),data=phen,G = list(ecotype_id = K[phen$ecotype_id,phen$ecotype_id]),iters = 100,silent = T)
+      h2_plasticity = get_h2_LDAK(phen$plasticity,model.matrix(~x,phen),K_phen,LDAK_path,weights = K_phen_weight)
+      lm_plasticity_F = get_F(h2_plasticity,list(K[phen$ecotype_id,phen$ecotype_id]),phen$plasticity,X_plasticity[,2,drop=FALSE],X_plasticity[,1,drop=FALSE])$F
 
       # EMMAX-2
-      EMMAX2_F = get_F(get_h2_sommer(lm2_0),list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
+      EMMAX2_F = get_F(h20,list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
 
       # Grid-LMM - 10 steps
-      Grid_10_F = get_F(nearest_h2(get_h2_sommer(lm2),all_h2s10),list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
+      Grid_10_F = get_F(nearest_h2(h22,all_h2s10),list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
 
       # Grid-LMM - 20 steps
-      Grid_20_F = get_F(nearest_h2(get_h2_sommer(lm2),all_h2s20),list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
+      Grid_20_F = get_F(nearest_h2(h22,all_h2s20),list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
 
       # Grid-LMM - 100 steps
-      Grid_100_F = get_F(nearest_h2(get_h2_sommer(lm2),all_h2s100),list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
+      Grid_100_F = get_F(nearest_h2(h22,all_h2s100),list(K_g,K_gxe),phen_tall$y,X_tall[,c(2,4)],X_tall[,c(1,3)])$F.2
+      
+      setwd('..')
             
       data.frame(h2,prop_var,rep,snp
-                 ,get_h2_sommer(lm1),get_h2_sommer(lm1b)
+                 ,h21,h21b
                  ,p_1 = -log10(pf(lm1_F,1,n_full - 4,lower.tail=F))
                  ,p_1b = -log10(pf(lm1b_F,1,n_full - 4,lower.tail=F))
                  ,p_2 = -log10(pf(lm2_F,1,n_full - 4,lower.tail=F))
@@ -196,10 +226,11 @@ results = foreach(h2 = iter(h2s,by='row'),.combine = 'rbind') %do% {
     }
   }
 }
-
+setwd('..')
 saveRDS(results,file = sprintf('Results/Atwell_power_Wald/set1_%s.rds',run))
 
 # collect all results
+library(foreach)
 results = foreach(file = list.files(path='Results/Atwell_power_Wald',pattern = 'set1',full.names = T),.combine = 'rbind') %do% {
   readRDS(file)
 }
