@@ -63,6 +63,6 @@ p2 = ggplot(fitted_size,aes(x=N)) +
   ylab('MB for Cholesky matrix') + xlab('N observations')
 p2
 
-ss_time_size = plot_grid(p2,p1,nrow = 1,labels = c('a','b'),rel_widths = c(1,2));ss_time_size
+ss_time_size = plot_grid(p1,p2,nrow = 1,labels = c('a','b'),rel_widths = c(2,1));ss_time_size
 save_plot('Figures/Sample_size_times.pdf',ss_time_size,base_aspect_ratio = 2.5)
 
