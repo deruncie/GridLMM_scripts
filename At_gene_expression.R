@@ -183,20 +183,23 @@ i1 = which(abs(res_h2$ID.REML.1 - 0.05)<0.1 & abs(res_h2$ID.REML.2 - 0.75)<0.05)
 i2 = which(abs(res_h2$ID.REML.1 - 0.55)<0.1 & abs(res_h2$ID.REML.2 - 0.05)<0.05)[1];
 i1 = 78
 i2 = 32
-i3 = which(abs(res_h2$ID.REML.1 - 0.35)<0.1 & abs(res_h2$ID.REML.2 - 0.35)<0.05)[1];
-i3 = 54
 
 
 library(rstan)
 rstan_options(auto_write = TRUE)
 options(mc.cores = 4)#parallel::detectCores())
 
+const = 1e-1
+K1 = K*(1-const) + diag(const,nrow(K));K1[lower.tri(K1)] = t(K1)[lower.tri(K1)]
+K_E1 = K_E*(1-const) + diag(const,nrow(K));K_E[lower.tri(K_E)] = t(K_E)[lower.tri(K_E)]
+
+
 sK1 = svd(K1)
 Ut = t(sK1$u)
 d_sqrt = sqrt(sK1$d)
 D = diag(d_sqrt^2);rownames(D) = colnames(D) = rownames(K1)
-UtK2U = Ut %*% K_epi1 %*% t(Ut)
-rownames(UtK2U) = colnames(UtK2U) = rownames(K_epi1)
+UtK2U = Ut %*% K_E %*% t(Ut)
+rownames(UtK2U) = colnames(UtK2U) = rownames(K_E)
 cUtK2U = t(chol(UtK2U))
 
 d = data.frame(y = vst_matrix[i1,])
@@ -253,7 +256,6 @@ stan_fit1
 stan_fit2
 sum(get_elapsed_time(stan_fit1))/60/60 # hours
 sum(get_elapsed_time(stan_fit2))/60/60
-
 
 
 samples = do.call(cbind,extract(stan_fit1,c('sigma','sds')))
@@ -344,13 +346,8 @@ save_plot(plot=p,filename='AT_priors_comparison.pdf',base_aspect_ratio = 2/3,bas
 
 # LDAK
 
-LDAK_path = file.path('./../../home/deruncie/projects/GridLMM/Revision_sims/misc_software/ldak5') # change path to your LDAK program
-scratch = paste0('/scratch/deruncie')
-try(dir.create(scratch))
-setwd(scratch)
 
-
-LDAK_path = file.path('./../../../home/deruncie/projects/GridLMM/Revision_sims/misc_software/ldak5') # change path to your LDAK program
+LDAK_path = file.path('./../misc_software/ldak5') # change path to your LDAK program
 folder = paste0('G',0)
 try(dir.create(folder))
 setwd(folder)
