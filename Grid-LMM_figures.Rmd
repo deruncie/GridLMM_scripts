@@ -299,13 +299,14 @@ for(i in unique(results_focal$G)) {
   }
 }
 results_summary = aggregate(results_focal[,c('exact-LMM-G+GxE','exact-LMM-G','exact-LMM-GxE','null-LMM','Grid-LMM(0.1)')],by=list(G=results$G,GxE = results$GxE,prop_var=results$prop_var),FUN = function(x) mean(x > -log10(2e-7))) #4e-6,p_3,p_4,p_5,p_8 #-log10(2.6e-8)p_1b,,p_8,p_9
-results_summary_tall = melt(subset(results_summary,prop_var != 0.01),id.vars = c('G','GxE','prop_var'))
+results_summary_tall = melt(subset(results_summary,prop_var >= -0.01),id.vars = c('G','GxE','prop_var'))
 results_summary_tall$prop_var = factor(results_summary_tall$prop_var)
 p = ggplot(results_summary_tall,aes(x=prop_var,y=value,group=variable)) + 
       geom_col(aes(fill = variable),position = position_dodge()) + 
       facet_grid(G~GxE,labeller = 'label_both') + 
       xlab('Fraction of variance due to marker') + ylab(expression('Power with '~alpha~'= 2e-7')) +
-      theme_bw() + theme(legend.title = element_blank())
+      theme_bw() + theme(legend.title = element_blank()) + 
+      theme(axis.text=element_text(size=7))
 g = plot_to_gtable(p)
 g = gtable_remove_grobs(g,c("panel-2-3", "panel-3-2", "panel-3-3", "strip-t-2-3", "strip-t-3-2", "strip-t-3-3"))
 ## move axis closer to panel

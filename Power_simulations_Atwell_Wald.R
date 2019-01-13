@@ -28,7 +28,7 @@ library(data.table)
 h2s = as.matrix(expand.grid(G = c(0,0.4,.8), GxE = c(0,0.4,.8)))
 h2s = h2s[rowSums(h2s) < 1,]
 
-prop_vars = c(0,0.01,0.025,0.05,0.1,0.15,0.2)
+prop_vars = c(0,0.001,0.005,0.01,0.025,0.05,0.1,0.15,0.2)
 nReps = 100
 foreach(rep = 1:nReps) %do% {
   try(dir.create(sprintf('Rep_%d',rep)))
@@ -102,7 +102,8 @@ ZK_g = Z_eco %*% t(chol_K)
 ZK_gxe = (Z_trt*ZK_g)
 ZK_gxe_plasticity = Z_plasticity %*% t(chol_K)
 
-LDAK_path = '../../misc_software/ldak5'
+# LDAK_path = '../../misc_software/ldak5'
+LDAK_path = '../../LDAK/ldak5' # set path to LDAK program
 K_g = K_g
 K_gxe = K_gxe
 setwd('Rep_1')
